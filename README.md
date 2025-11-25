@@ -76,23 +76,4 @@ npm run dev
 ```
 
 
-/src
-│
-├── components/
-│   ├── Common/              # SummaryCard, ChartRenderer, Lists
-│   ├── Layout/              # Header, DateFilter
-│   └── Pages/               # SalesAndExpenses, PurchaseHistory, etc.
-│
-├── hooks/
-│   ├── useAuth.js
-│   ├── useCalculations.js
-│   ├── useData.js
-│   └── useHandlers.js
-│
-├── utils/
-│   ├── dataUtils.js         # Date helpers, filters, grouping logic
-│   └── firebase.js          # Firebase initialization
-│
-├── App.jsx                  # Main component, router, global state handling
-└── main.jsx                 # Application entry point
 
