@@ -2,7 +2,7 @@
 
 A multi-tenant financial management application built using **React** and **Firebase Firestore**, designed for small textile businesses.
 
----
+
 
 ## Features
 
