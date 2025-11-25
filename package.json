@@ -1,5 +1,5 @@
 {
-  "name": "Multi-Tenant-Financial-Hub",
+  "name": "multi-tenant-financial-hub",
   "version": "1.0.0",
   "description": "Multi-tenant financial hub for a small textile business.",
   "main": "src/main.jsx",

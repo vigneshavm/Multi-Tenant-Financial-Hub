@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, appId } from '../utils/firebase';
 
 const useAuthentication = () => {
@@ -32,7 +32,7 @@ const useAuthentication = () => {
                 setUserId(user.uid);
                 setIsAuthReady(true);
             } else {
-                // Initial sign-in logic (uses global initialAuthToken, assumed to be imported)
+                // Initial sign-in logic (uses global initialAuthToken)
                 const initialAuthToken = typeof window.__initial_auth_token !== 'undefined' ? window.__initial_auth_token : null;
                 const handleSignIn = async () => {
                     try {
@@ -81,6 +81,7 @@ const useAuthentication = () => {
     };
 
     useEffect(() => {
+        // Restore session state
         const storedRole = sessionStorage.getItem('appRole');
         const storedOrgId = sessionStorage.getItem('appOrgId');
         
