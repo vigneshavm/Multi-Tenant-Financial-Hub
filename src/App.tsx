@@ -1,68 +1,41 @@
-import React, { useState, useEffect, type JSX } from 'react';
+import React, { useState, useEffect, type JSX, type FormEvent } from 'react'; // Import FormEvent
 import useAuthentication from './hooks/useAuth';
 import useDataFetching from './hooks/useData';
 import useDataCalculations from './hooks/useCalculations';
 import useDataHandlers from './hooks/useHandlers';
 
 // Firebase imports needed for updateDoc
-import { doc, updateDoc, Firestore } from 'firebase/firestore'; 
+import { doc, updateDoc, Firestore } from 'firebase/firestore';
 
 // Import components and utilities
 import DateFilter from './components/Layout/DateFilter';
-import SalesAndExpensesEntry  from './components/Pages/SalesAndExpensesEntry';
-import  ChequesAndPurchaseEntry  from './components/Pages/ChequesAndPurchaseEntry';
-import  PurchaseHistory  from './components/Pages/PurchaseHistory';
-import  BankFinancialHistory  from './components/Pages/BankFinancialHistory';
-import   PinScreen  from './components/Auth/PinScreen';
-import  StaffOrgConnect  from './components/Auth/StaffOrgConnect';
-import { db, appId } from './utils/firebase'; // Assuming db is Firestore | null
+import SalesAndExpensesEntry from './components/Pages/SalesAndExpensesEntry';
+import ChequesAndPurchaseEntry from './components/Pages/ChequesAndPurchaseEntry';
+import PurchaseHistory from './components/Pages/PurchaseHistory';
+import BankFinancialHistory from './components/Pages/BankFinancialHistory'; // Import Cheque type
+import PinScreen from './components/Auth/PinScreen';
+import StaffOrgConnect from './components/Auth/StaffOrgConnect';
+import { db, appId } from './utils/firebase';
 
 // --- TYPE DEFINITIONS ---
-
-// Define the role type for clarity
+// (Your type definitions remain unchanged)
 type UserRole = 'Owner' | 'Staff' | 'Guest' | string;
-// FIX: Re-exporting interfaces so utility functions can correctly reference them.
 export interface Transaction { 
     id: string;
-    dateLogged: string; // ISO date string or similar (YYYY-MM-DDTHH:MM:SS)
-    amount: number; // Generic amount field for transactions
-    [key: string]: any; // Allow for other fields
+    dateLogged: string;
+    amount: number;
+    [key: string]: any;
 }
-
-export interface Sale extends Transaction {
-    total: number; // Specific field for sales revenue
-}
-
-
-export interface Expense extends Transaction {
-    // Inherits amount from Transaction
-}
-
-// Define the structure for transaction items (minimal)
-interface TransactionItem {
-    id: string;
-    description: string;
-    [key: string]: any; 
-}
-
-// Grouped data structure: Array of [groupingKey, transactionList] tuples
+export interface Sale extends Transaction { total: number; }
+export interface Expense extends Transaction { }
+// FIX: Update TransactionItem to be compatible with Cheque
+interface TransactionItem { id: string; description: string; type?: string; amount?: number; date?: string; status?: string; [key: string]: any; }
 type GroupedData = [string, TransactionItem[]][];
-
-// Calculation hook return type (minimal definition based on usage)
-interface Calculations {
-    filterType: string;
-    groupedSales: GroupedData;
-    groupedExpenses: GroupedData;
-    [key: string]: any; // Allows for other calculated properties
-}
-
 export interface Purchase extends Transaction {
     paymentDueDate: string;
     expectedPaymentDate: string;
     status: 'Pending' | 'Paid' | 'Over Due' | string; 
 }
-
-// Data fetching hook return type (minimal definition based on usage)
 interface FetchedData {
     sales: Sale[];
     expenses: Expense[];
@@ -73,15 +46,6 @@ interface FetchedData {
     currentOrgName: string;
     setCurrentOrgName: React.Dispatch<React.SetStateAction<string>>;
 }
-
-// Data handler hook return type (minimal definition based on usage)
-interface Handlers {
-    handleAdd: (collection: string, data: any) => Promise<void>;
-    handleDelete: (collection: string, id: string | number) => void;
-    handleUpdate: (collection: string, id: string | number, data: any) => Promise<void>;
-}
-
-// Authentication hook return type (must match useAuthentication)
 interface AuthData {
     pin: string;
     setPin: React.Dispatch<React.SetStateAction<string>>;
@@ -103,8 +67,6 @@ interface AuthData {
     currentAuthToken: string | null;
     handleOrgRegistration: () => Promise<void>;
 }
-
-// State object passed to children components
 interface AppState {
     role: UserRole;
     setError: React.Dispatch<React.SetStateAction<string | null>>;
@@ -112,8 +74,6 @@ interface AppState {
     currentOrgName: string;
     userId: string | null;
 }
-
-// Nav Item type
 interface NavItem {
     id: string;
     label: string;
@@ -124,7 +84,7 @@ interface NavItem {
 const App: React.FC = () => {
     const [activeTab, setActiveTab] = useState<string>('bank');
     
-    // 1. Authentication and State Hook (Casting the return type)
+    // 1. Authentication and State Hook
     const auth: AuthData = useAuthentication();
     const {
         pin, setPin, showPinScreen, role, userId, organizationId, setOrganizationId, isAuthReady, error, setError,
@@ -132,37 +92,35 @@ const App: React.FC = () => {
         handlePinSubmit, handleOrgSelectSubmit, handleLogout, currentAuthToken, handleOrgRegistration
     } = auth;
 
-    // 2. Data Fetching Hook (Casting the return type)
+    // 2. Data Fetching Hook
     const dataFetched: FetchedData = useDataFetching(isAuthReady, organizationId, role);
     const { sales, expenses, purchases, cheques, bankBalance, orgList, currentOrgName, setCurrentOrgName } = dataFetched;
+    const typedOrgList = orgList as any[] | null;
+    // FIX: Cast cheques to Cheque[]
+    const typedCheques = cheques as unknown as any[];
 
-    // 3. Calculation Hook (Casting the return type)
+    // 3. Calculation Hook
     const calculations: any = useDataCalculations(sales, expenses, purchases);
-   
-    const [isAuthenticating, setIsAuthenticating] = useState(false); // Example loading state
+    
+    const [isAuthenticating, setIsAuthenticating] = useState(false);
     // Org Name Management State
     const [isEditingOrgName, setIsEditingOrgName] = useState<boolean>(false);
     const [newOrgName, setNewOrgName] = useState<string>(currentOrgName);
 
     useEffect(() => {
-        // Synchronize local edit state with fetched org name
         setNewOrgName(currentOrgName);
     }, [currentOrgName]);
 
     const handleSaveOrgName = async () => {
-        // Ensure Firestore instance exists and user has permission
         if (!organizationId || !db || role !== 'Owner' || !newOrgName.trim()) {
             if (role !== 'Owner') setError("Only the Owner can edit the organization name.");
             return;
         }
         
         try {
-            // db is Firestore | null, so we must check it and cast for use with doc
             const database = db as Firestore;
             const orgDocRef = doc(database, `artifacts/${appId}/public/data/organizations`, organizationId);
-            
             await updateDoc(orgDocRef, { name: newOrgName.trim() });
-            
             setCurrentOrgName(newOrgName.trim());
             setIsEditingOrgName(false);
             setError(null);
@@ -172,53 +130,66 @@ const App: React.FC = () => {
         }
     };
     
-    // 4. Data Handler Provider (Casting the return type)
+    // 4. Data Handler Provider
     const handlers: any = useDataHandlers({ organizationId, role, setError });
 
     // Bundle state for cleaner props
     const state: AppState = { role, setError, organizationId, currentOrgName, userId };
 
+    // FIX: Create a wrapper function to handle the form submission event
+    const onOrgSelectFormSubmit = async (e: FormEvent) => {
+        e.preventDefault(); // Prevent default form submission
+        if (selectedOrgId) {
+            setIsAuthenticating(true);
+            await handleOrgSelectSubmit(selectedOrgId);
+            setIsAuthenticating(false);
+        }
+    };
+
+
     // --- Conditional Content Rendering ---
-
-
-        const renderContent = (): JSX.Element => {
+    const renderContent = (): JSX.Element => {
         if (!organizationId) {
-             if (role === 'Staff') return <StaffOrgConnect 
-                 orgList={orgList} 
-                 selectedOrgId={selectedOrgId} 
-                 setSelectedOrgId={setSelectedOrgId} 
-                 orgIdInput={orgIdInput} 
-                 setOrgIdInput={setOrgIdInput} 
-                 handleOrgSelectSubmit={handleOrgSelectSubmit} 
-                 error={error}
-             />;
-             return <p className='text-center text-gray-600'>Loading authentication...</p>;
+            // FIX: Use typedOrgList and provide ALL required props, including the 'mode' discriminant.
+            if (role === 'Staff' && typedOrgList && typedOrgList.length > 0) {
+                return (
+                    <StaffOrgConnect
+                        // 1. Common Props (Required)
+                        mode="selection" // The discriminant prop is CRITICAL here
+                        userId={userId || ''}
+                        isAuthenticating={isAuthenticating}
+                        error={error}
+                        // 2. Selection Mode Props
+                        orgList={typedOrgList}
+                        selectedOrgId={selectedOrgId}
+                        setSelectedOrgId={setSelectedOrgId}
+                        handleOrgSelectSubmit={onOrgSelectFormSubmit} // Use the wrapper function
+                    />
+                );
+            }
+            // NOTE: You will add the 'setup' mode block here later when you implement that flow.
+            return <p className='text-center text-gray-600'>Loading authentication...</p>;
         }
         
         switch (activeTab) {
             case 'sales-expenses': return <SalesAndExpensesEntry handlers={handlers} state={state} calculations={calculations} />;
             case 'cheques-purchase-entry': return <ChequesAndPurchaseEntry handlers={handlers} state={state} />;
             case 'purchase-history': return <PurchaseHistory handlers={handlers} state={state} calculations={calculations} />;
-            case 'bank': default: return <BankFinancialHistory handlers={handlers} state={state} data={{sales, expenses, purchases, cheques, bankBalance}} calculations={calculations} />;
+            case 'bank': default: return <BankFinancialHistory handlers={handlers} state={state} data={{sales, expenses, purchases, cheques: typedCheques, bankBalance}} calculations={calculations} />;
         }
     };
     
     // --- Initial Pin Screen ---
-    // If showPinScreen is true OR if Auth is not yet confirmed (isAuthReady is false)
     if (showPinScreen || !isAuthReady) {
         return (
-
             <PinScreen 
-            pin={pin} 
-            setPin={setPin} 
-            handlePinSubmit={handlePinSubmit} // Passing the actual handler function
-            error={error}
-            
-            // ADDED REQUIRED PROPS:
-            activeTab={activeTab}
-            isAuthenticating={isAuthenticating}
-        />
-            // <PinScreen pin={pin} setPin={setPin} handlePinSubmit={() => handlePinSubmit(activeTab)} error={error} />
+                pin={pin} 
+                setPin={setPin} 
+                handlePinSubmit={handlePinSubmit}
+                error={error}
+                activeTab={activeTab}
+                isAuthenticating={isAuthenticating}
+            />
         );
     }
     
@@ -257,7 +228,7 @@ const App: React.FC = () => {
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                                                 </button>
                                                 <button onClick={() => {setIsEditingOrgName(false); setNewOrgName(currentOrgName);}} className="text-red-500 hover:text-red-700" title="Cancel">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
                                                 </button>
                                             </span>
                                         ) : (
