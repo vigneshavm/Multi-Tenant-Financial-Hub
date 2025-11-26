@@ -1,40 +1,84 @@
 import React, { useState, useEffect } from 'react';
-import { db, appId } from '../../utils/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+// Import the actual types for Firestore operations
+import { Firestore, doc, updateDoc } from 'firebase/firestore';
 
-const Header = ({ role, organizationId, currentOrgName, handleLogout, error, activeTab, setActiveTab, setError }) => {
+// Assuming these are defined in your utility file and potentially null
+import { db, appId } from '../../utils/firebase'; 
+
+// --- TYPE DEFINITIONS ---
+
+type UserRole = 'Owner' | 'Staff' | 'Guest' | string;
+type ActiveTab = 'sales-expenses' | 'cheques-purchase-entry' | 'purchase-history' | 'bank' | string;
+
+interface HeaderProps {
+    role: UserRole;
+    organizationId: string | null;
+    currentOrgName: string;
+    handleLogout: () => void;
+    error: string | null;
+    activeTab: ActiveTab;
+    setActiveTab: React.Dispatch<React.SetStateAction<ActiveTab>>;
+    setError: React.Dispatch<React.SetStateAction<string | null>>;
+}
+
+interface NavItem {
+    id: ActiveTab;
+    label: string;
+    ownerOnly?: boolean;
+}
+
+const Header: React.FC<HeaderProps> = ({ 
+    role, 
+    organizationId, 
+    currentOrgName, 
+    handleLogout, 
+    error, 
+    activeTab, 
+    setActiveTab, 
+    setError 
+}) => {
     
     // State management for organization name editing (Owner only)
-    const [isEditingOrgName, setIsEditingOrgName] = useState(false);
-    const [newOrgName, setNewOrgName] = useState(currentOrgName);
+    const [isEditingOrgName, setIsEditingOrgName] = useState<boolean>(false);
+    const [newOrgName, setNewOrgName] = useState<string>(currentOrgName);
 
     useEffect(() => {
         setNewOrgName(currentOrgName);
     }, [currentOrgName]);
 
     const handleSaveOrgName = async () => {
-        if (!organizationId || !db || role !== 'Owner' || !newOrgName.trim()) return;
+        // Ensure Firestore instance exists, user has permission, and name is not empty
+        if (!organizationId || !db || role !== 'Owner' || !newOrgName.trim()) {
+            if (role === 'Owner') setError("Organization name cannot be empty.");
+            return;
+        }
+
         try {
-            const orgDocRef = doc(db, `artifacts/${appId}/public/data/organizations`, organizationId);
+            // Cast db to Firestore since we checked for its existence
+            const database = db as Firestore;
+            const orgDocRef = doc(database, `artifacts/${appId}/public/data/organizations`, organizationId);
+            
             await updateDoc(orgDocRef, { name: newOrgName.trim() });
-            // This relies on the parent component's state update to propagate the new name
+            
+            // Note: This relies on the parent component's state update (e.g., in useDataFetching) 
+            // to propagate the new name back to currentOrgName
             setIsEditingOrgName(false);
-            setError(''); 
+            setError(null); 
         } catch (e) { 
             console.error("Error saving organization name:", e); 
             setError("Failed to save organization name."); 
         }
     };
     
-    const navItems = [
+    const navItems: NavItem[] = [
         { id: 'sales-expenses', label: 'Sales & Expenses Entry' },
         { id: 'cheques-purchase-entry', label: 'Cheques & Purchase Entry' },
         { id: 'purchase-history', label: 'Bill Due Monitoring' },
         { id: 'bank', label: 'Financial Dashboard', ownerOnly: true },
     ];
     
+    // Filter navigation items based on user role
     const filteredNavItems = navItems.filter(item => !item.ownerOnly || role === 'Owner');
-
 
     return (
         <header className="mb-6 bg-white rounded-xl shadow-md">
@@ -49,7 +93,13 @@ const Header = ({ role, organizationId, currentOrgName, handleLogout, error, act
                                 {role === 'Owner' ? (
                                     isEditingOrgName ? (
                                         <span className="inline-flex items-center gap-1 ml-2">
-                                            <input type="text" value={newOrgName} onChange={(e) => setNewOrgName(e.target.value)} className="bg-gray-100 p-1 rounded text-sm border border-indigo-300 w-40" placeholder="Enter Name" />
+                                            <input 
+                                                type="text" 
+                                                value={newOrgName} 
+                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewOrgName(e.target.value)} 
+                                                className="bg-gray-100 p-1 rounded text-sm border border-indigo-300 w-40" 
+                                                placeholder="Enter Name" 
+                                            />
                                             <button onClick={handleSaveOrgName} className="text-green-600 hover:text-green-800" title="Save">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                                             </button>
@@ -84,7 +134,11 @@ const Header = ({ role, organizationId, currentOrgName, handleLogout, error, act
             {/* Navigation Tabs */}
             <nav className="flex flex-wrap gap-1 p-2">
                 {filteredNavItems.map(item => (
-                    <button key={item.id} onClick={() => setActiveTab(item.id)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-700 hover:bg-gray-100'}`}>
+                    <button 
+                        key={item.id} 
+                        onClick={() => setActiveTab(item.id)} 
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-700 hover:bg-gray-100'}`}
+                    >
                         {item.label}
                     </button>
                 ))}
